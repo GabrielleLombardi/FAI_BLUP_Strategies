@@ -1,0 +1,929 @@
+---
+title: "Strategies_FAI_BLUP"
+author: "LombardiG"
+date: "13/10/2021"
+---
+Entrada dos Dados
+
+```{r}
+## Pacotes
+
+rm(list=ls(all=T)) 
+setwd("/home/gabrielle/R")
+
+pkg <- c( "ggplot2", "patchwork", "corrplot", "RColorBrewer", "metan", "tidyr", "reshape2") 
+
+sapply(pkg, library, character.only=TRUE, logical.return=TRUE) #verificando se todos os pacotes estão funcionando
+
+## Entrada e Transformação dos Dados
+
+dados <- read.table("/home/gabrielle/R/cap2_", header=T,  sep = ",", dec = ".")
+dados <- transform(dados, ENV=factor(ENV), GEN = factor(GEN), R= factor(R), B= factor(B))
+dados$FLOR <- as.numeric(dados$FLOR)
+
+str(dados)
+```
+
+1ª Estratégia
+
+```{r}
+
+### 1ª Estratégia - Individual por local (3 locais, 11 caracteres/local)
+
+#Definir os ideotipos para realizar os FAI-BLUPs de acordo com os números de caracteres
+
+
+D.ideotype <- c("max","max","max","min","max", "max", "min", "max", "max", "max", "max") #ideotipo desejaveis
+U.ideotype <- c("min","min","min","max", "min", "min","max", "min", "min", "min", "min") #ideotipo não desejavel
+
+
+#Selecionando os dados por local e realizando: 1. Análise Univariada (função gamem() ), 2. Qualidade Experimental (função: get_model_data() ) e 3. Análise FAI-BLUP (função: fai_blup() )
+
+########## Janaúba
+dadosJ <- subset(dados,subset = dados$ENV=="J") #selecionou apenas os dados de Janauba
+dadosJ<-dadosJ[,-1] #Removou a coluna ENV
+head(dadosJ)
+
+
+
+FJ <- gamem(dadosJ, GEN, R, B, resp = c(FLOR,AP,MS,UM,PMV,PMS,LIG,HEM,FDN,FDA,CEL)) #realizou o modelo misto para todos os caracteres
+QJ <- get_model_data(FJ, "genpar") #Qualidade Experimental
+fbJ <- fai_blup(FJ, SI = 15, DI=D.ideotype, UI=U.ideotype) #realizou o fai-blup com os blups feitos anteriomente
+#plot(fbJ) #plota os genótipos selecionados pelo FAI-blup
+
+########## Sete Lagoas
+dadosSL <- subset(dados,subset = dados$ENV=="SL")
+dadosSL<-dadosSL[,-1]
+head(dadosSL)
+
+FSL <- gamem(dadosSL, GEN, R, B, resp = c(FLOR,AP,MS,UM,PMV,PMS,LIG,HEM,FDN,FDA,CEL)) 
+QSL <- get_model_data(FSL, "genpar") 
+fbSL <- fai_blup(FSL, SI = 15, DI=D.ideotype, UI=U.ideotype)
+
+########## SINOP
+dadosS <- subset(dados,subset = dados$ENV=="S")
+dadosS<-dadosS[,-1]
+
+FS <- gamem(dadosS, GEN, R, B, resp = c(FLOR,AP,MS,UM,PMV,PMS,LIG,HEM,FDN,FDA,CEL)) 
+QS <- get_model_data(FS, "genpar")
+fbS <- fai_blup(FS, SI = 15, DI=D.ideotype, UI=U.ideotype)
+
+summary(dadosJ)
+summary(dadosSL)
+summary(dadosS)
+```
+
+2ª Estratégia
+
+```{r}
+##2ª Estratégia - Análise conjunta (3 locais e 11 caracteres) (Blups dos genótipos). Na 2ª Estratégia utilizou a função gamem_met, pois considerou, nesta estratégia, os 3 ambientes conjuntamente. 
+
+dados
+
+FT <- gamem_met(dados, ENV, GEN, R, B, resp = c(FLOR,AP,MS,UM,PMV,PMS,LIG,HEM,FDN,FDA,CEL)) 
+QT <- get_model_data(FT, "genpar")
+fbT <- fai_blup(FT, SI = 15, DI=D.ideotype, UI=U.ideotype)
+```
+
+3ª Estratégia
+
+```{r}
+##3ª Estratégia - Análise conjunta (3 locais e 11 caracteres) (Blups da interação)
+
+#Ontendo os Dados
+
+names_car <- c("FLOR","AP","MS","UM","PMV","PMS","LIG","HEM","FDN","FDA","CEL") # names = Pc = Componentes Principais,  Janaúba, Sinop, Sete Lagoas. 
+
+dados_e3 <- data.frame(FT[["FLOR"]][["BLUPint"]][["Predicted"]], FT[["AP"]][["BLUPint"]][["Predicted"]], FT[["MS"]][["BLUPint"]][["Predicted"]], FT[["UM"]][["BLUPint"]][["Predicted"]], FT[["PMV"]][["BLUPint"]][["Predicted"]], FT[["PMS"]][["BLUPint"]][["Predicted"]], FT[["LIG"]][["BLUPint"]][["Predicted"]], FT[["HEM"]][["BLUPint"]][["Predicted"]], FT[["FDN"]][["BLUPint"]][["Predicted"]], FT[["FDA"]][["BLUPint"]][["Predicted"]], FT[["CEL"]][["BLUPint"]][["Predicted"]])
+
+colnames(dados_e3) <- names_car
+
+
+#Adicionando a col nomes genótipos e ambiente
+names_env_gen <- c("ENV", "GEN")
+dados_e3_ <- data.frame(dados$ENV, dados$GEN)
+colnames(dados_e3_) <- names_env_gen
+dadose3 <- data.frame(dados_e3_,dados_e3) #conjunto de dados prontos para iniciar as análises
+dadose3_1 <-dadose3[,-1]
+
+#Ajustando os dados de acordo com os genótipos
+dadose3_2 <- aggregate(cbind(FLOR, AP, MS, UM, PMV, PMS, LIG, HEM, FDN, FDA, CEL) ~ GEN, dadose3_1, mean)
+rownames(dadose3_2) <- dadose3_2$GEN
+dadose3_3 <- dadose3_2[,-1]
+
+#Realizando o fai_blup
+fb3 <- fai_blup(dadose3_3, SI = 15, DI=D.ideotype, UI=U.ideotype)
+```
+
+4ª Estratégia
+```{r}
+##4ª Estratégia - Novos caracteres/local (33 caracteres, blups das individuais)
+
+#Juntando os BLUPS da E1
+
+FJ_4 <- data.frame(FJ[["FLOR"]][["BLUPgen"]][["Predicted"]], FJ[["AP"]][["BLUPgen"]][["Predicted"]], FJ[["MS"]][["BLUPgen"]][["Predicted"]], FJ[["UM"]][["BLUPgen"]][["Predicted"]], FJ[["PMV"]][["BLUPgen"]][["Predicted"]], FJ[["PMS"]][["BLUPgen"]][["Predicted"]], FJ[["LIG"]][["BLUPgen"]][["Predicted"]], FJ[["HEM"]][["BLUPgen"]][["Predicted"]], FJ[["FDN"]][["BLUPgen"]][["Predicted"]], FJ[["FDA"]][["BLUPgen"]][["Predicted"]], FJ[["CEL"]][["BLUPgen"]][["Predicted"]])
+
+FSL_4 <- data.frame(FSL[["FLOR"]][["BLUPgen"]][["Predicted"]], FSL[["AP"]][["BLUPgen"]][["Predicted"]], FSL[["MS"]][["BLUPgen"]][["Predicted"]], FSL[["UM"]][["BLUPgen"]][["Predicted"]], FSL[["PMV"]][["BLUPgen"]][["Predicted"]], FSL[["PMS"]][["BLUPgen"]][["Predicted"]], FSL[["LIG"]][["BLUPgen"]][["Predicted"]], FSL[["HEM"]][["BLUPgen"]][["Predicted"]], FSL[["FDN"]][["BLUPgen"]][["Predicted"]], FSL[["FDA"]][["BLUPgen"]][["Predicted"]], FSL[["CEL"]][["BLUPgen"]][["Predicted"]])
+
+
+FS_4 <- data.frame(FS[["FLOR"]][["BLUPgen"]][["Predicted"]], FS[["AP"]][["BLUPgen"]][["Predicted"]], FS[["MS"]][["BLUPgen"]][["Predicted"]], FS[["UM"]][["BLUPgen"]][["Predicted"]], FS[["PMV"]][["BLUPgen"]][["Predicted"]], FS[["PMS"]][["BLUPgen"]][["Predicted"]], FS[["LIG"]][["BLUPgen"]][["Predicted"]], FS[["HEM"]][["BLUPgen"]][["Predicted"]], FS[["FDN"]][["BLUPgen"]][["Predicted"]], FS[["FDA"]][["BLUPgen"]][["Predicted"]], FS[["CEL"]][["BLUPgen"]][["Predicted"]])
+
+
+#Adicionando os nomes dos caracteres (caractere e local)
+
+names_car_J <- c("FLOR_J","AP_J","MS_J","UM_J","PMV_J","PMS_J","LIG_J","HEM_J","FDN_J","FDA_J","CEL_J")
+names_car_S <- c("FLOR_S","AP_S","MS_S","UM_S","PMV_S","PMS_S","LIG_S","HEM_S","FDN_S","FDA_S","CEL_S")
+names_car_SL <- c("FLOR_SL","AP_SL","MS_SL","UM_SL","PMV_SL","PMS_SL","LIG_SL","HEM_SL","FDN_SL","FDA_SL","CEL_SL")
+
+colnames(FJ_4) <- names_car_J
+colnames(FSL_4) <- names_car_SL
+colnames(FS_4) <- names_car_S
+
+#Juntando os data.frames
+dados_e4 <- data.frame(FJ_4, FSL_4, FS_4) #conjunto de dados prontos para iniciar as análises
+
+#Realizando o Fai-Blup
+
+D.ideotype2 <- c("max","max","max", "min","max","max", "min","max","max","max", "max", "max","max","max", "min","max","max", "min","max","max","max", "max","max","max","max", "min","max","max", "min","max","max","max", "max") #ideotipo desejaveis
+U.ideotype2 <- c("min","min","min", "max","min","min", "max","min","min","min","min","min","min","min", "max","min","min", "max","min","min","min","min", "min","min","min", "max","min","min", "max","min","min","min","min") #ideotipo não desejavel
+
+rownames(dados_e4) <- FJ[["FLOR"]][["BLUPgen"]][["GEN"]]
+
+fbT4 <- fai_blup(dados_e4, SI = 15, DI=D.ideotype2, UI=U.ideotype2, verbose=TRUE)
+```
+
+5ª Estratégia
+```{r}
+##5ª Estratégia - Novos caracteres/local (33 caracteres, blups da conjunta)
+
+##2ª Estratégia - Conjunta (11 caracteres)
+
+dados
+
+FT5 <- gamem_met(dados, ENV, GEN, R, B, resp = c(FLOR,AP,MS,UM,PMV,PMS,LIG,HEM,FDN,FDA,CEL)) 
+
+# Ajustando os dados para análise da 5ª estratégia - selecionado blups preditos da interação.
+
+names_car <- c("FLOR","AP","MS","UM","PMV","PMS","LIG","HEM","FDN","FDA","CEL")
+
+dados_e5 <- data.frame(FT5[["FLOR"]][["BLUPint"]][["Predicted"]], FT5[["AP"]][["BLUPint"]][["Predicted"]], FT5[["MS"]][["BLUPint"]][["Predicted"]], FT5[["UM"]][["BLUPint"]][["Predicted"]], FT5[["PMV"]][["BLUPint"]][["Predicted"]], FT5[["PMS"]][["BLUPint"]][["Predicted"]], FT5[["LIG"]][["BLUPint"]][["Predicted"]], FT5[["HEM"]][["BLUPint"]][["Predicted"]], FT5[["FDN"]][["BLUPint"]][["Predicted"]], FT5[["FDA"]][["BLUPint"]][["Predicted"]], FT5[["CEL"]][["BLUPint"]][["Predicted"]])
+
+colnames(dados_e5) <- names_car
+
+#Adicionando a col nomes genótipos e ambiente
+
+names5_ <- c("ENV", "GEN")
+dados5_ <- data.frame(dados$ENV, dados$GEN)
+colnames(dados5_) <- names5_
+dados5m_ <- data.frame(dados5_,dados_e5) #conjunto de dados prontos para iniciar as análises
+
+#Ajustando os dados para análise de FAI_BLUP com inner_join (cada local é uma nova váriavel)
+
+
+dados5m_1 <- melt(dados5m_, na.rm = TRUE) #derretendo os dados
+dados5m_1 <- within(dados5m_1, ENV_CAR <- paste(ENV, variable, sep='_')) #criando nova variavel, juntando nome de local com os caracteres
+dados5m_1 <- dados5m_1[,-1] #removendo coluna ENV
+dados5m_1 <- dados5m_1[,-2] #removendo col Variable
+
+
+dados5m_2 <- pivot_wider(dados5m_1, names_from=ENV_CAR, values_from=value, values_fn = list(value = mean))
+
+dados5m_3 <-dados5m_2[,-1]
+rownames(dados5m_3) <- dados5m_2$GEN
+
+D.ideotype2 <- c("max","max","max", "max","max","max", "max","max","max","min", "min", "min", "max","max","max", "max","max","max","min", "min", "min", "max","max","max", "max","max","max", "max","max","max", "max", "max", "max") #ideotipo desejaveis
+U.ideotype2 <- c("min","min","min", "min","min","min", "min","min","min","max","max","max", "min","min","min", "min","min","min","max", "max", "max", "min","min","min", "min","min","min", "min","min", "min", "min", "min", "min") #ideotipo não desejavel
+
+
+fbT5 <- fai_blup(dados5m_3, SI = 15, DI=D.ideotype2, UI=U.ideotype2, verbose=TRUE)
+```
+
+Figuras:
+
+Figura 1. Autovalores e CF da E1
+
+```{r}
+#Fazendo a Figura 1 (Ela conterá autovalores, correlação dos fatores 1M.
+
+## Ordem dos Caracteres que eu quero: FLOW, PH; GMH; DM, UM; DMH; NDF, ADF, LIG, HEM, CC.
+
+### Figuras
+
+## Figura 1 - Autovalores e VC
+
+# Ajustando a tabela de Dados. -> selecionar os dados gerados pelo FAI-blup para gerar as figuras! Para a primeira figura selecionou os dados de autovalores e variação cumulativa
+
+names <- c("PC", "J", "SL", "S") # names = Pc = Componentes Principais,  Janaúba, Sinop, Sete Lagoas. 
+
+AT <- (data.frame (fbJ[["eigen"]][["PC"]], fbJ[["eigen"]][["eigen.values"]], fbSL[["eigen"]][["eigen.values"]], fbS[["eigen"]][["eigen.values"]]))
+
+CV <- (data.frame (fbJ[["eigen"]][["PC"]], fbJ[["eigen"]][["cumulative.var"]], fbSL[["eigen"]][["cumulative.var"]], fbS[["eigen"]][["cumulative.var"]]))
+
+colnames(AT) <- names
+colnames(CV) <- names
+
+AT1 <- melt(AT,id.vars="PC")
+namesAT1 <- c("PC", "L", "AT") # nomes = componentes principais, locais e autovalores
+colnames(AT1) <- namesAT1
+
+CV1 <- melt(CV, id.vars = "PC")
+namesCV1 <- c("PC", "L", "CV") # nomes = componentes principais, locais e variancia cumulativa
+colnames(CV1) <- namesCV1
+
+Figura1 <- AT1 %>% full_join(CV1) #juntando os dataframes com as informações do AT e do CV
+
+
+#Fazendo a Figura Autovalores
+
+str(Figura1)
+
+Figura1$PC <- c("01","02", "03", "04", "05", "06", "07", "08","09", "10", "11") #alterando o nome de uma linha do dataframe
+
+
+F1 <- ggplot(Figura1, aes(x = PC, y = AT, fill= L, label = round(CV,1))) +
+      geom_col(position = "dodge") +
+      geom_text(position = position_dodge(width = 0.9), vjust = -0.5, size=2.5, color ="black", face="bold") +
+      scale_fill_manual(values=c("#0000CC", "#0066CC", "#6699FF"), name = "Locais", labels = c("Janaúba", "Sete Lagoas", "Sinop")) +
+      theme(legend.title = element_text(face = "bold", size=14), 
+          legend.text = element_text(face = "bold", size=12), 
+          legend.key = element_rect(fill = "darkgray"),
+          legend.position=c(0.75,0.85), 
+          legend.background = element_rect(fill="white", color="white",size=0.7), 
+          legend.direction ="horizontal", 
+          axis.title.y = element_text(color = "black", size = 20, angle = 90, hjust = .5, vjust = 0, face = "bold"),
+          axis.title.x = element_text(color = "black", size = 17,  hjust = .5, vjust = 0, face = "bold"),
+          panel.background = element_rect(fill = "white", color= "black"), 
+          axis.line = element_line(color = "black"), 
+          axis.text.x = element_text(color = "black", size = 12),
+          axis.text.y = element_text(color = "black", size = 12))+
+     geom_hline(yintercept=1, linetype = "dashed", color="red") +
+     coord_cartesian(ylim = c(0.3, 5.5))+
+     labs (y = "Autovalores", x = "Componentes Principais de Variância")
+
+
+## Figura Fatores Correlação - caracteres
+
+Figura2J <- data.frame(fbJ[["FA"]])
+namesF2 <- c("CAR", "01", "02", "03", "04", "C" )
+colnames(Figura2J)<- namesF2
+Figura2J.m <- melt(Figura2J)
+
+
+
+F2J <- ggplot(Figura2J.m, aes(variable, CAR)) + 
+    geom_tile(aes(fill = value) , colour = "white") + 
+    scale_fill_gradient2(low = "#7F0000", high = "#00007F", mid = "white") +
+    theme_minimal()+ # minimal theme
+    theme(legend.title = element_blank(),
+          legend.position = "none",
+          axis.title.y = element_text(color = "black", size = 20, angle = 90, hjust = .5, vjust = 0, face = "bold"),
+          axis.title.x = element_text(color = "black", size = 17,  hjust = .5, vjust = 0, face = "bold"),
+          panel.background = element_rect(fill = "white", color= "black"), 
+          axis.text.x = element_text(color = "black", size = 12),
+          axis.text.y = element_text(color = "black", size = 12))+
+    labs (title = "Janaúba", y = "Caracteres", x = "Fatores") +
+    theme(plot.title = element_text(size= 18, hjust = .5, face = "bold"))
+  
+
+
+
+Figura2S <- data.frame(fbS[["FA"]])
+namesF2S <- c("CAR", "01", "02", "03", "C" )
+colnames(Figura2S)<- namesF2S
+Figura2S.m <- melt(Figura2S)
+
+
+F2S <- ggplot(Figura2S.m, aes(variable, CAR)) + 
+    geom_tile(aes(fill = value) , colour = "white") + 
+   scale_fill_gradient2(low = "#7F0000", high = "#00007F", mid = "white", midpoint = 0, limit = c(-1,1), space = "Lab",  name="") +
+   theme_minimal()+ # minimal theme
+   theme(legend.title = element_text(face = "bold", size=12), 
+          legend.text = element_text(face = "bold", size=10), 
+          legend.key = element_rect(fill = "darkgray"),
+          legend.background = element_rect(fill="white", color="white",size=0.7), 
+          axis.title.y = element_text(color = "black", size = 20, angle = 90, hjust = .5, vjust = 0, face = "bold"),
+          axis.title.x = element_text(color = "black", size = 17,  hjust = .5, vjust = 0, face = "bold"),
+          panel.background = element_rect(fill = "white", color= "black"), 
+          axis.text.x = element_text(color = "black", size = 12),
+          axis.text.y = element_text(color = "black", size = 12))+
+    labs (title = "Sinop", y = "", x = "Fatores") +
+    theme(plot.title = element_text(size= 18, hjust = .5, face = "bold"))
+
+
+Figura2SL <- data.frame(fbSL[["FA"]])
+namesF2SL <- c("CAR", "01", "02", "03", "C" )
+colnames(Figura2SL)<- namesF2SL
+Figura2SL.m <- melt(Figura2SL)
+
+
+F2SL <- ggplot(Figura2SL.m, aes(variable, CAR)) + 
+    geom_tile(aes(fill = value) , colour = "white") + 
+   scale_fill_gradient2(low = "#7F0000", high = "#00007F", mid = "white", midpoint = 0, limit = c(-1,1), space = "Lab",  name="") +
+    theme_minimal()+ # minimal theme
+    theme(legend.title = element_blank(),
+          legend.position = "none",
+          axis.title.y = element_text(color = "black", size = 20, angle = 90, hjust = .5, vjust = 0, face = "bold"),
+          axis.title.x = element_text(color = "black", size = 17,  hjust = .5, vjust = 0, face = "bold"),
+          panel.background = element_rect(fill = "white", color= "black"), 
+          axis.text.x = element_text(color = "black", size = 12),
+          axis.text.y = element_text(color = "black", size = 12))+
+    labs (title = "Sete Lagoas", y = "", x = "Fatores") +
+    theme(plot.title = element_text(size= 18, hjust = .5, face = "bold"))
+
+
+F1 / ((F2J | F2SL | F2S)  +  plot_layout(tag_level = 'new')) + plot_annotation(tag_levels = c('A', '1'), tag_sep = '.')
+
+
+```
+
+Figura 2. Ranqueamento dos Genótipos e GS da E1
+
+```{r}
+## Figura - Ranqueamento dos Genótipos FAI-BLUP
+
+fJ <- plot(fbJ) +
+     scale_fill_manual(name = "", values=c("red", "darkblue"), labels = c("Não Selecionado", "Selecionado")) +
+     theme(axis.title.y = element_text(size = 12, angle = 90, face = "bold"), 
+           legend.text = element_text(face = "bold", size=8),
+          legend.direction ="horizontal",
+          legend.position = "none")+
+     labs(y = "Janaúba, MG") + 
+     annotate("text", x = 1, y = 0.1, label = "")
+
+fS <- plot(fbS) +
+    scale_fill_manual(name = "", values=c("red", "darkblue"), labels = c("Não Selecionado", "Selecionado")) +
+    theme(axis.title.y = element_text(size = 12, angle = 90, face = "bold"), legend.position = "none" ) +
+    labs(y = "Sinop, MT") + 
+    annotate("text", x = 1, y = 0.35, label = "") 
+
+fSL <- plot(fbSL) +
+       scale_fill_manual(name = "", values=c("red", "darkblue"), labels = c("Não Selecionado", "Selecionado")) +
+       theme(axis.title.y = element_text(size = 12, angle = 90, face = "bold"),  legend.text = element_text(face = "bold", size=8),
+             legend.direction ="horizontal") +
+       labs(y = "Sete Lagoas, MG") + 
+       annotate("text", x = 1, y = 0.35, label = "") 
+
+
+## Figura  - Ganhos Genéticos
+
+#Calcular os ganhos
+
+##J
+BlupsJ <- (fbJ[["data"]])
+
+Mj <- colMeans(BlupsJ[sapply(BlupsJ, is.numeric)])
+Mj <- as.data.frame.list(Mj)
+
+MjF <- (BlupsJ[c("20", "10", "13", "4" ),])
+MjF <-colMeans(MjF[sapply(MjF, is.numeric)])
+MjF <- as.data.frame.list(MjF)
+
+
+Figura3j <- Mj %>% full_join(MjF)
+names <- c("Mj", "MjF") 
+rownames(Figura3j) <- names
+
+
+
+## Função!
+for (i in 1:ncol(Figura3j)) {
+  GSj = (((MjF-Mj)/Mj)*100)
+}
+
+GSj <- as.data.frame.list(GSj)
+
+##S
+BlupsS <- (fbS[["data"]])
+
+Ms <- colMeans(BlupsS[sapply(BlupsS, is.numeric)])
+Ms <- as.data.frame.list(Ms)
+
+MsF <- (BlupsS[c("23", "1", "6", "8" ),])
+MsF <-colMeans(MsF[sapply(MsF, is.numeric)])
+MsF <- as.data.frame.list(MsF)
+
+
+Figura3s <- Ms %>% full_join(MsF)
+names <- c("Ms", "MsF") 
+rownames(Figura3s) <- names
+
+## Função com for!
+for (i in 1:ncol(Figura3s)) {
+  GSs = (((MsF-Ms)/Ms)*100)
+ }
+GSs <- as.data.frame.list(GSs)
+
+##SL
+BlupsSL <- (fbSL[["data"]])
+
+Msl <- colMeans(BlupsSL[sapply(BlupsSL, is.numeric)])
+Msl <- as.data.frame.list(Msl)
+
+MslF <- (BlupsSL[c("17", "16", "4", "3" ),])
+MslF <-colMeans(MslF[sapply(MslF, is.numeric)])
+MslF <- as.data.frame.list(MslF)
+
+
+Figura3sl <- Msl %>% full_join(MslF)
+names <- c("Msl", "MslF") 
+rownames(Figura3sl) <- names
+
+## Função!
+for (i in 1:ncol(Figura3sl)) {
+  GSsl = (((MslF-Msl)/Msl)*100)
+ }
+GSsl <- as.data.frame.list(GSsl)
+
+
+Figura3G <- data.frame(GSj %>% full_join(GSsl) %>% full_join(GSs))  #unir varios dataframes
+names <- c("J", "SL", "S") 
+rownames(Figura3G) <- names
+
+Figura3G["L"]<-c("Janaúba", "SeteLagoas","Sinop")
+Figura3G1 <- melt(Figura3G, id.vars = "L")
+
+F3 <- Figura3G1 %>%
+  mutate(variable = fct_relevel(variable, 
+        "FLOR","AP","MS","UM","PMV","PMS","LIG","HEM","FDN","FDA","CEL")) %>%
+  ggplot(aes(x = variable, y = value, fill=L, label = round(value,1))) +
+      geom_col(position = "dodge") +
+      geom_text(position = position_dodge(width = 0.9), vjust = -0.5, size=2.5, color ="black", face="bold") +
+      scale_fill_manual(values=c("#0000CC", "#0066CC", "#6699FF"), name = "Locais", labels = c("Janaúba", "Sete Lagoas", "Sinop")) +
+      theme(legend.title = element_text(face = "bold", size=14), 
+          legend.text = element_text(face = "bold", size=12), 
+          legend.key = element_rect(fill = "darkgray"),
+          legend.position="top", 
+          legend.background = element_rect(fill="white", color="white",size=0.7), 
+          legend.direction ="horizontal", 
+          axis.title.y = element_text(color = "black", size = 20, angle = 90, hjust = .5, vjust = 0, face = "bold"),
+          axis.title.x = element_text(color = "black", size = 17,  hjust = .5, vjust = 0, face = "bold"),
+          panel.background = element_rect(fill = "white", color= "black"), 
+          axis.line = element_line(color = "black"), 
+          axis.text.x = element_text(color = "black", size = 10),
+          axis.text.y = element_text(color = "black", size = 10))+
+     geom_hline(yintercept=0, linetype = "solid", color="black") +
+     geom_hline(yintercept=seq(-10, 40, by=10), linetype = "dashed", color="#CCCCCC") +
+     labs (y = "Ganho Esperaro (GS%)", x = "")+
+    coord_cartesian(ylim = c(-10, 40))
+
+
+
+patchwork <- (fJ | fSL | fS) / F3
+patchwork[[1]] <- patchwork[[1]] + plot_layout(tag_level = 'new')
+patchwork + plot_annotation(tag_levels = c('A', '1'), tag_sep = '.',title = 'Genótipos Selecionados pelo índice FAI-BLUP', theme = theme(plot.title = element_text(face = "bold", hjust = 0.5)))
+  
+```
+
+Figura 3.AUTOVALORES DAS Estratégias 2, 3 ,4 e 5
+
+```{r}
+#fIGURA 3 -> AUTOVALORES DAS METODOLOGIAS 2, 3 ,4 e 5
+
+#SEGUNDA METODOLOGIA
+
+#Componentes
+# Ajustando a tabela de Dados Figura T
+
+namest <- c("PC", "AT", "CV") # names = Pc = Componentes Principais,  Janaúba, Sinop, Sete Lagoas. 
+Figura1t <- (data.frame (fbT[["eigen"]][["PC"]], fbT[["eigen"]][["eigen.values"]], fbT[["eigen"]][["cumulative.var"]]))
+colnames(Figura1t) <- namest
+str(Figura1t)
+
+Figura1t$PC <- c("01","02", "03", "04", "05", "06", "07", "08", "09", "10", "11")
+
+ 
+F1t <-   ggplot(Figura1t, aes(x = PC, y = AT, label = round(CV,1))) +
+         geom_col(position = "dodge", color=c("#000033"), fill = c("#000033")) + #color = linha entorno do box, fill = colore dentro do box
+         geom_text(position = position_dodge(width = 0.9), vjust = -0.5, size=3.5, color ="black", face="bold") +
+         theme(axis.title.y = element_text(color = "black", size = 18, angle = 90, hjust = .5, vjust = 0, face = "bold"),
+            axis.title.x = element_text(color = "black", size = 17,  hjust = .5, vjust = 0, face = "bold"),
+            panel.background = element_rect(fill = "white", color= "black"), 
+            axis.line = element_line(color = "black"), 
+            axis.text.x = element_text(color = "black", size = 13),
+            axis.text.y = element_text(color = "black", size = 13))+
+        geom_hline(yintercept=1, linetype = "dashed", color="darkred") +
+        coord_cartesian(ylim = c(0.3, 15))+
+        labs(y = "Autovalores", x = "") +
+        ggtitle("2ª Estratégia")+
+        theme(plot.title = element_text(size=14, face="bold"))
+
+#Terceira METODOLOGIA
+
+#Componentes
+# Ajustando a tabela de Dados Figura T
+
+namest <- c("PC", "AT", "CV") # names = Pc = Componentes Principais,  Janaúba, Sinop, Sete Lagoas. 
+Figurat <- (data.frame (fb3[["eigen"]][["PC"]], fb3[["eigen"]][["eigen.values"]], fb3[["eigen"]][["cumulative.var"]]))
+colnames(Figurat) <- namest
+str(Figurat)
+
+Figurat$PC <- c("01","02", "03", "04", "05", "06", "07", "08", "09", "10", "11")
+
+ 
+F1t_2 <-   ggplot(Figurat, aes(x = PC, y = AT, label = round(CV,1))) +
+         geom_col(position = "dodge", color=c("#000033"), fill = c("#000033")) + #color = linha entorno do box, fill = colore dentro do box
+         geom_text(position = position_dodge(width = 0.9), vjust = -0.5, size=3.5, color ="black", face="bold") +
+         theme(axis.title.y = element_text(color = "black", size = 18, angle = 90, hjust = .5, vjust = 0, face = "bold"),
+            axis.title.x = element_text(color = "black", size = 17,  hjust = .5, vjust = 0, face = "bold"),
+            panel.background = element_rect(fill = "white", color= "black"), 
+            axis.line = element_line(color = "black"), 
+            axis.text.x = element_text(color = "black", size = 13),
+            axis.text.y = element_text(color = "black", size = 13))+
+        geom_hline(yintercept=1, linetype = "dashed", color="darkred") +
+        coord_cartesian(ylim = c(0.3, 15))+
+        labs(y = "Autovalores", x = "Componentes Principais de Variância") +
+        ggtitle("3ª Estratégia")+
+        theme(plot.title = element_text(size=14, face="bold"))
+
+#quartA METODOLOGIA
+
+# Ajustando a tabela de Dados Figura T_3
+namest <- c("PC", "AT", "CV") # names = Pc = Componentes Principais,  Janaúba, Sinop, Sete Lagoas. 
+Figura1t_3 <- (data.frame (fbT_4[["eigen"]][["PC"]], fbT_4[["eigen"]][["eigen.values"]], fbT_4[["eigen"]][["cumulative.var"]]))
+colnames(Figura1t_3) <- namest
+
+#Fazendo a Figura
+str(Figura1t_3)
+Figura1t_3 <-Figura1t_3[1:11, ]
+Figura1t_3$PC <- c("01","02", "03", "04", "05", "06", "07", "08", "09", "10", "11")
+
+ 
+F1t_3 <-   ggplot(Figura1t_3, aes(x = PC, y = AT, label = round(CV,1))) +
+         geom_col(position = "dodge", color=c("#000033"), fill = c("#000033")) + #color = linha entorno do box, fill = colore dentro do box
+         geom_text(position = position_dodge(width = 0.9), vjust = -0.5, size=3.5, color ="black", face="bold") +
+         theme(axis.title.y = element_text(color = "black", size = 18, angle = 90, hjust = .5, vjust = 0, face = "bold"),
+            axis.title.x = element_text(color = "black", size = 17,  hjust = .5, vjust = 0, face = "bold"),
+            panel.background = element_rect(fill = "white", color= "black"), 
+            axis.line = element_line(color = "black"), 
+            axis.text.x = element_text(color = "black", size = 13),
+            axis.text.y = element_text(color = "black", size = 13))+
+        geom_hline(yintercept=1, linetype = "dashed", color="darkred") +
+        coord_cartesian(ylim = c(0.3, 15))+
+        labs(y = "", x = "")  +
+        ggtitle("4ª Estratégia")+
+        theme(plot.title = element_text(size=14, face="bold"))
+
+
+#QUinta METODOLOGIA
+
+# Ajustando a tabela de Dados Figura T_3
+namest <- c("PC", "AT", "CV") # names = Pc = Componentes Principais,  Janaúba, Sinop, Sete Lagoas. 
+Figura1t_4 <- (data.frame (fbT5[["eigen"]][["PC"]], fbT5[["eigen"]][["eigen.values"]], fbT5[["eigen"]][["cumulative.var"]]))
+colnames(Figura1t_4) <- namest
+
+#Fazendo a Figura
+str(Figura1t_4)
+Figura1t_4 <-Figura1t_4[1:11, ]
+Figura1t_4$PC <- c("01","02", "03", "04", "05", "06", "07", "08", "09", "10", "11")
+
+F1t_4 <-   ggplot(Figura1t_4, aes(x = PC, y = AT, label = round(CV,1))) +
+         geom_col(position = "dodge", color=c("#000033"), fill = c("#000033")) + #color = linha entorno do box, fill = colore dentro do box
+         geom_text(position = position_dodge(width = 0.9), vjust = -0.5, size=3.5, color ="black", face="bold") +
+         theme(axis.title.y = element_text(color = "black", size = 18, angle = 90, hjust = .5, vjust = 0, face = "bold"),
+            axis.title.x = element_text(color = "black", size = 17,  hjust = .5, vjust = 0, face = "bold"),
+            panel.background = element_rect(fill = "white", color= "black"), 
+            axis.line = element_line(color = "black"), 
+            axis.text.x = element_text(color = "black", size = 13),
+            axis.text.y = element_text(color = "black", size = 13))+
+        geom_hline(yintercept=1, linetype = "dashed", color="darkred") +
+        coord_cartesian(ylim = c(0.3, 15))+
+        labs(y = "", x = "Componentes Principais de Variância") +
+        ggtitle("5ª Estratégia")+
+         theme(plot.title = element_text(size=14, face="bold"))
+
+#Figura
+
+t1 <- F1t / F1t_2 | F1t_3 / F1t_4 
+t1 + plot_annotation(tag_levels = "A")
+```
+
+Figura 4. CORRELAÇÃO DOS FATORES DAS Estratégias 2, 3, 4 e 5
+
+```{r}
+## Figura 4 - -> CORRELAÇÃO DOS FATORES DAS METODOLOGIAS 2, 3 E 4
+
+#F2ºM
+
+Figura2T <- data.frame(fbT[["FA"]])
+namesF2T <- c("CAR", "1", "2", "3", "4", "C" )
+colnames(Figura2T)<- namesF2T
+Figura2T.m <- melt(Figura2T)
+
+
+F2T <- ggplot(Figura2T.m, aes(variable, CAR)) + 
+    geom_tile(aes(fill = value), colour = "white") + 
+    scale_fill_gradient2(low = "#7F0000", high = "#00007F", mid = "white", midpoint = 0, limit = c(-1,1), space = "Lab", name="") +
+    theme_minimal()+ # minimal theme
+    coord_fixed() +
+    theme(legend.position = "none",
+          axis.title.y = element_text(color = "black", size = 16, angle = 90, hjust = .5, vjust = 0, face = "bold"),
+          axis.title.x = element_text(color = "black", size = 14,  hjust = .5, vjust = 0, face = "bold"),
+          panel.background = element_rect(fill = "white", color= "black"), 
+          axis.text.x = element_text(color = "black", size = 12),
+          axis.text.y = element_text(color = "black", size = 12))+
+    labs (y = "Caracteres", x = "Fatores")+
+    ggtitle("2ª Estratégia") +
+  theme(plot.title = element_text(size=14, face="bold", hjust = 0.5))
+
+
+#3ºM
+
+FiguraT <- data.frame(fb3[["FA"]])
+namesFT <- c("CAR", "1", "2", "3", "4", "C" )
+colnames(Figura2T)<- namesFT
+Figura3T.m <- melt(Figura2T)
+
+
+F3T <- ggplot(Figura3T.m, aes(variable, CAR)) + 
+    geom_tile(aes(fill = value), colour = "white") + 
+    scale_fill_gradient2(low = "#7F0000", high = "#00007F", mid = "white", midpoint = 0, limit = c(-1,1), space = "Lab", name="") +
+    theme_minimal()+ # minimal theme
+    coord_fixed() +
+    theme(legend.position = "none",
+          axis.title.y = element_text(color = "black", size = 16, angle = 90, hjust = .5, vjust = 0, face = "bold"),
+          axis.title.x = element_text(color = "black", size = 14,  hjust = .5, vjust = 0, face = "bold"),
+          panel.background = element_rect(fill = "white", color= "black"), 
+          axis.text.x = element_text(color = "black", size = 12),
+          axis.text.y = element_text(color = "black", size = 12))+
+    labs (y = "", x = "Fatores")+
+    ggtitle("3ª Estratégia") +
+  theme(plot.title = element_text(size=14, face="bold", hjust = 0.5))
+
+
+
+#4ªM
+Figura2T_3 <- data.frame(fbT_4[["FA"]])
+namesF2T_3 <- c("CAR", "1", "2", "3", "4", "5", "6", "7", "C" )
+colnames(Figura2T_3)<- namesF2T_3
+Figura2T_3.m <- melt(Figura2T_3)
+
+
+F2T_3 <- ggplot(Figura2T_3.m, aes(variable, CAR)) + 
+    geom_tile(aes(fill = value) , colour = "white") + 
+    scale_fill_gradient2(low = "#7F0000", high = "#00007F", mid = "white", midpoint = 0, limit = c(-1,1), space = "Lab", name="") +
+    theme_minimal()+ # minimal theme
+    coord_fixed() +
+    theme(legend.position = "none",
+          axis.title.y = element_text(color = "black", size = 16, angle = 90, hjust = .5, vjust = 0, face = "bold"),
+          axis.title.x = element_text(color = "black", size = 14,  hjust = .5, vjust = 0, face = "bold"),
+          panel.background = element_rect(fill = "white", color= "black"), 
+          axis.text.x = element_text(color = "black", size = 12),
+          axis.text.y = element_text(color = "black", size = 10))+
+    labs (y = "", x = "Fatores") +
+    ggtitle("4ª Estratégia")+
+  theme(plot.title = element_text(size=14, face="bold", hjust = 0.5))
+
+#5ªM
+
+Figura2T_4 <- data.frame(fbT5[["FA"]])
+namesF2T_4 <- c("CAR", "1", "2", "3",  "4", "5","6", "7", "C" )
+colnames(Figura2T_4)<- namesF2T_4
+Figura2T_4.m <- melt(Figura2T_4)
+
+
+F2T_4 <- ggplot(Figura2T_4.m, aes(variable, CAR)) + 
+    geom_tile(aes(fill = value) , colour = "white") + 
+    scale_fill_gradient2(low = "#7F0000", high = "#00007F", mid = "white", midpoint = 0, limit = c(-1,1), space = "Lab", name="") +
+    theme_minimal()+ # minimal theme
+    coord_fixed() +
+    theme(legend.title = element_text(face = "bold", size=12), 
+          legend.text = element_text(face = "bold", size=10), 
+          legend.key = element_rect(fill = "darkgray"),
+          legend.background = element_rect(fill="white", color="white",size=0.7), 
+          axis.title.y = element_text(color = "black", size = 16, angle = 90, hjust = .5, vjust = 0, face = "bold"),
+          axis.title.x = element_text(color = "black", size = 14,  hjust = .5, vjust = 0, face = "bold"),
+          panel.background = element_rect(fill = "white", color= "black"), 
+          axis.text.x = element_text(color = "black", size = 12),
+          axis.text.y = element_text(color = "black", size = 10))+
+    labs (y = "", x = "Fatores")+
+    ggtitle("5ª Estratégia") +
+  theme(plot.title = element_text(size=14, face="bold", hjust = 0.5))
+
+###fIGURA 4
+
+F4 <- (F2T | F3T) |F2T_3 | F2T_4 
+F4 + plot_annotation(tag_levels = "A")
+```
+Figura 5. GENÓTIPOS SELECIONADOS  DAS Estratégias 2, 3, 4 e 5
+
+```{r}
+
+## -> GENÓTIPOS SELECIONADOS  DAS METODOLOGIAS 2, 3 E 4
+
+# 2 ª METODOLOGIA
+fT <- plot(fbT) +
+    scale_fill_manual(name = "", values=c("red", "darkblue"), labels = c("Não Selecionado", "Selecionado")) +
+    theme(axis.title.y = element_text(size = 12, angle = 90, face = "bold"),  legend.text = element_text(face = "bold", size=10), legend.direction ="horizontal") +
+    labs(y = "") + 
+    ggtitle("2ª Estratégia") +
+    theme(plot.title = element_text(size=14, face="bold", hjust = 0.5))+ 
+    annotate("text", x = 1, y = 0.15, label = "") 
+
+# 3 ª METODOLOGIA
+fT_ <- plot(fb3) +
+    scale_fill_manual(name = "", values=c("red", "darkblue"), labels = c("Não Selecionado", "Selecionado")) +
+    theme(axis.title.y = element_text(size = 12, angle = 90, face = "bold"),  legend.text = element_text(face = "bold", size=10), legend.direction ="horizontal") +
+    labs(y = "") + 
+    ggtitle("3ª Estratégia") +
+    theme(plot.title = element_text(size=14, face="bold", hjust = 0.5))+ 
+    annotate("text", x = 1, y = 0.15, label = "") 
+
+# 4ª METODOLOGIA
+fT_3 <- plot(fbT_4) +
+    scale_fill_manual(name = "", values=c("red", "darkblue"), labels = c("Não Selecionado", "Selecionado")) +
+    theme(axis.title.y = element_text(size = 12, angle = 90, face = "bold"),  legend.text = element_text(face = "bold", size=10),  legend.direction ="horizontal") +
+    labs(y = "") + 
+    ggtitle("4ª Estratégia") +
+    theme(plot.title = element_text(size=14, face="bold", hjust = 0.5))+ 
+    annotate("text", x = 1, y = 0.015, label = "")
+
+
+# 5ª METODOLOGIA
+fT_4 <- plot(fbT5) +
+    scale_fill_manual(name = "", values=c("red", "darkblue"), labels = c("Não Selecionado", "Selecionado")) +
+    theme(axis.title.y = element_text(size = 12, angle = 90, face = "bold"),  legend.text = element_text(face = "bold", size=10), legend.direction ="horizontal") +
+    labs(y = "") + 
+    ggtitle("5ª Estratégia") +
+    theme(plot.title = element_text(size=14, face="bold", hjust = 0.5))+ 
+    annotate("text", x = 1, y = 0.015, label = "")
+
+#fIGURA
+
+
+((fT | fT_ | fT_3| fT_4)) +  plot_layout(guides = 'collect') +  plot_annotation(title = 'Seleção de Genótipos pelo Índice FAI-BLUP', tag_levels = "A") & theme(legend.title = element_text(face = "bold", size=13), legend.key = element_rect(fill = "white", color = "white"), legend.position = "bottom", plot.title = element_text(face = "bold", size = 14, hjust = 0.5))
+```
+Figura 6. GANHO POR SELEÇÃO das Estratégias 2, 3, 4 e 5
+
+```{r}
+#Figura 6 -> GANHO POR SELEÇÃO  DAS METODOLOGIAS 2, 3, 4 e 5
+
+# 2 ª METODOLOGIA
+
+# Ajustando os dados para análise da 5ª metodologia - selecionado blups preditos da interação.
+
+names4 <- c("FLOW", "PH", "DM", "UM", "GMH", "DMH", "LIG", "HEM", "NDF", "ADF", "CEL") 
+dadosx <- data.frame((fbT[["data"]]))
+
+#namesMt <- c("FLOW", "PH", "DM", "UM", "GMH", "DMH", "LIG", "HEM", "NDF", "ADF", "CEL")
+Mtx <- colMeans(dadosx[sapply(dadosx, is.numeric)])
+Mtx <- as.data.frame.list(Mtx)
+
+MtFx <- (dadosx[c("18", "17", "13", "4" ),])
+MtFx <-colMeans(MtFx[sapply(MtFx, is.numeric)])
+MtFx <- as.data.frame.list(MtFx)
+
+Figura3tx <- Mtx %>% full_join(MtFx)
+names <- c("Mtx", "MtFx") 
+rownames(Figura3tx) <- names
+
+## Função!
+for (i in 1:ncol(Figura3tx)) {
+  GStx = (((MtFx-Mtx)/Mtx)*100)
+ }
+GStx <- as.data.frame.list(GStx)
+
+
+# 3 ª METODOLOGIA
+
+# Ajustando os dados para análise da 5ª metodologia - selecionado blups preditos da interação.
+
+dadosy <- data.frame((fb3[["data"]]))
+
+#namesMt <- c("FLOW", "PH", "DM", "UM", "GMH", "DMH", "LIG", "HEM", "NDF", "ADF", "CEL")
+Mty <- colMeans(dadosy[sapply(dadosy, is.numeric)])
+Mty <- as.data.frame.list(Mty)
+
+MtFy <- (dadosy[c("18", "17", "13", "4" ),])
+MtFy <-colMeans(MtFy[sapply(MtFy, is.numeric)])
+MtFy <- as.data.frame.list(MtFy)
+
+
+Figura3ty <- Mty %>% full_join(MtFy)
+names <- c("Mty", "MtFy") 
+rownames(Figura3ty) <- names
+
+## Função!
+for (i in 1:ncol(Figura3ty)) {
+  GSty = (((MtFy-Mty)/Mty)*100)
+ }
+GSty <- as.data.frame.list(GSty)
+
+# 4ª METODOLOGIA
+
+# Considerando a seleção realizada no geral e em cada local
+# Ajustando os dados para análise da 5ª metodologia - selecionado blups preditos da interação.
+
+dadosz <- data.frame((fbT_4[["data"]]))
+
+#namesMt <- c("FLOW", "PH", "DM", "UM", "GMH", "DMH", "LIG", "HEM", "NDF", "ADF", "CEL")
+Mtz <- colMeans(dadosz[sapply(dadosz, is.numeric)])
+Mtz <- as.data.frame.list(Mtz)
+
+MtFz <- (dadosz[c("18", "15", "3", "4" ),])
+MtFz <-colMeans(MtFz[sapply(MtFz, is.numeric)])
+MtFz <- as.data.frame.list(MtFz)
+
+
+Figura3t_3 <- Mtz %>% full_join(MtFz)
+names <- c("Mtz", "MtFz") 
+rownames(Figura3t_3) <- names
+
+## Função!
+for (i in 1:ncol(Figura3t_3)) {
+  GStz = (((MtFz-Mtz)/Mtz)*100)
+ }
+GStz <- as.data.frame.list(GStz)
+
+##Derreter os dados GSt3
+
+
+GSt3_1 <- melt(GStz, na.rm = TRUE)
+
+GST3 <- separate(GSt3_1, 
+                    col = variable, 
+                    sep = "_", 
+                    into = c("L", "CAR"))
+GST3
+
+
+
+GST4 <- aggregate(GST3[, 3], list(GST3$CAR), mean)
+GSTz <- pivot_wider(GST4, names_from=Group.1, values_from=x)
+
+
+
+# 5ª METODOLOGIA
+
+dadosw <- data.frame((fbT5[["data"]]))
+
+#namesMt <- c("FLOW", "PH", "DM", "UM", "GMH", "DMH", "LIG", "HEM", "NDF", "ADF", "CEL")
+Mtw <- colMeans(dadosw[sapply(dadosw, is.numeric)])
+Mtw <- as.data.frame.list(Mtw)
+
+MtFw <- (dadosw[c("15", "7", "3", "4" ),])
+MtFw <-colMeans(MtFw[sapply(MtFw, is.numeric)])
+MtFw <- as.data.frame.list(MtFw)
+
+
+Figura3t_4 <- Mtw %>% full_join(MtFw)
+names <- c("Mtw", "MtFw") 
+rownames(Figura3t_4) <- names
+
+## Função!
+for (i in 1:ncol(Figura3t_4)) {
+  GStw = (((MtFw-Mtw)/Mtw)*100)}
+GStw <- as.data.frame.list(GStw)
+
+##Derreter os dados GSt3
+
+GSt3_4 <- melt(GStw, na.rm = TRUE)
+
+GST3_41 <- separate(GSt3_4, 
+                    col = variable, 
+                    sep = "_", 
+                    into = c("L", "CAR"))
+
+GST_41 <- aggregate(GST3_41[, 3], list(GST3_41$CAR), mean)
+
+GSTw <- pivot_wider(GST_41, names_from=Group.1, values_from=x)
+
+Figura6 <- data.frame(GStx) %>% full_join(GSty) %>% full_join(GSTz) %>% full_join(GSTw)  #unir varios dataframes
+
+names <- c("2ªM", "3ªM", "4ªM", "5ªM") 
+rownames(Figura6) <- names
+
+Figura6["M"]<-c("2ªM", "3ªM", "4ªM", "5ªM")
+Figura61 <- melt(Figura6, id.vars = "M")
+
+ Figura61 %>% mutate(variable = fct_relevel(variable, 
+            "FLOR", "AP", "PMV", "MS", "UM", "PMS", "FDN", "FDA", "LIG", "HEM", "CEL")) %>%
+      ggplot(aes(x = variable, y = value, fill=factor(M), label = round(value,1))) +
+      geom_col(position = "dodge") +
+     scale_fill_manual(values=c("#000033", "#0000CC", "#0066CC", "#6699FF"), name = "Estratégias", labels = c("E2", "E3", "E4", "E5")) +
+      geom_text(position = position_dodge(width = 0.9), vjust = -0.5, size=2.5, color ="black", face="bold") +
+      theme(legend.title = element_text(face = "bold", size=14), 
+          legend.text = element_text(face = "bold", size=12), 
+          legend.key = element_rect(fill = "darkgray"),
+          legend.position=c(0.8, 0.8),  
+          legend.background = element_rect(fill="white", color="white",size=0.7), 
+          legend.direction ="horizontal", 
+          axis.title.y = element_text(color = "black", size = 12, angle = 90, hjust = .5, vjust = 0, face = "bold"),
+          axis.title.x = element_text(color = "black", size = 16,  hjust = .5, vjust = 0, face = "bold"),
+          panel.background = element_rect(fill = "white", color= "black"), 
+          axis.line = element_line(color = "black"), 
+          axis.text.x = element_text(color = "black", size = 10),
+          axis.text.y = element_text(color = "black", size = 10))+
+     geom_hline(yintercept=0, linetype = "solid", color="black") +
+     geom_hline(yintercept=seq(-5, 20, by=5), linetype = "dashed", color="#CCCCCC") +
+     labs (y = "Ganho Esperaro (GS%)", x = "Caracteres")+
+    coord_cartesian(ylim = c(-5, 20))
+
+
+```
+
+
+
+
+
+
+
